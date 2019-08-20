@@ -84,12 +84,15 @@ def about_page():
     return about_text
 
 
+def get_string_date(date):
+    return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M')
+
 def get_all_devices():
     qs = Device.objects.all()
     results = []
     response = {'count': qs.count()}
     for item in qs:
-        results.append(dict(pk= str(item.pk), name=item.name, created_on=datetime.datetime.strftime(item.created_on, '%Y-%m-%d %H:%M')))
+        results.append(dict(pk= str(item.pk), name=item.name, created_on=get_string_date(item.created_on)))
     response['results'] = results
     return Response(json.dumps(response), status=200, mimetype='application/json')
 
@@ -102,7 +105,7 @@ def add_new_device(data):
     else:
         device = Device(name=name, created_on=datetime.datetime.now())
         device.save()
-        response = dict(name=device.name, created_on=device.created_on)
+        response = dict(name=device.name, created_on=get_string_date(device.created_on))
         status = 201
     return Response(json.dumps(response), status=status, mimetype='application/json')
 
@@ -122,7 +125,7 @@ def update_a_device(device_id, name):
             obj.name = name
             obj.save()
             status = 200
-            response = dict(name=obj.name, pk=obj.pk, created_on=obj.created_on)
+            response = dict(name=obj.name, pk=str(obj.pk), created_on=get_string_date(obj.created_on))
     return Response(json.dumps(response), status=status, mimetype='application/json')
 
 
@@ -157,8 +160,67 @@ def devices_view(device_id=None):
     
     if request.method.upper() == 'DELETE':
         return delete_a_device(device_id)
-
-
-def add_device_to_user():
+    
+    return jsonify(dict(detail="Method not allowed"))
+    
+    
+def list_all_users():
+    qs = User.objects.all()
+    response = dict(count=qs.count())
+    results = []
     status = 200
-    return Response( status=status, mimetype='application/json')
+    for item in qs:
+        results.append(dict(pk=str(item.pk), username=item.username, created_on=get_string_date(item.created_on),
+                            device=dict(pk=str(item.device.pk), name=item.device.name)
+                            ))
+    return Response(json.dumps(response), status=status, mimetype='application/json')
+
+
+def get_device_count_for_user(device_id):
+    device_count = User.objects.filter(device=device_id)
+    return device_count
+
+
+def get_device_obj(device_id):
+    try:
+        device = Device.objects.get(pk=device_id)
+    except Exception as exc:
+        print('GetDeviceExcep', exc)
+        device = None
+    return device
+
+
+def add_device_to_user(user_id, device_id):
+    MAX_USER_LIMIT = 3
+    device_assigned_count = get_device_count_for_user(device_id)
+    if device_assigned_count >= MAX_USER_LIMIT:
+        response = {'detail': 'User limit for device exceeded'}
+    else:
+        try:
+            user = User.objects.get(pk=user_id)
+        except Exception as exc:
+            print("UserGetExcep", exc)
+            response = {'user': 'No user found'}
+            status = 400
+        else:
+            device_obj = get_device_obj(device_id)
+            if device_obj is None:
+                response = {'device': 'No device is found'}
+            else:
+                user.device = device_obj
+                user.save()
+                response = {'user': user.username, 'device': device_obj.name}
+                status = 200
+    return Response(json.dumps(response), status=status, mimetype='application/json')
+
+
+@app.route('/user-device/', methods=['POST', 'GET'])
+def user_device_view():
+    if request.method.upper() == 'GET':
+        return list_all_users()
+    
+    if request.method.upper() == 'POST':
+        data = request.get_json()
+        user_id = data.get('user_id', None)
+        device_id = data.get('device_id', None)
+        return add_device_to_user(user_id, device_id)
