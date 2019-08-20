@@ -62,8 +62,8 @@ class Device(db.Document):
 class User(db.Document):
     username = db.StringField(required=True)
     password = db.StringField(max_length=50)
-    created_on = db.StringField(max_length=50)
-    device = db.ReferenceField(Device)
+    created_on = db.DateTimeField()
+    device = db.ReferenceField(Device, null=True)
 
 
 @app.route('/')
@@ -86,6 +86,7 @@ def about_page():
 
 def get_string_date(date):
     return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M')
+
 
 def get_all_devices():
     qs = Device.objects.all()
@@ -170,9 +171,12 @@ def list_all_users():
     results = []
     status = 200
     for item in qs:
-        results.append(dict(pk=str(item.pk), username=item.username, created_on=get_string_date(item.created_on),
-                            device=dict(pk=str(item.device.pk), name=item.device.name)
-                            ))
+        tmp = dict(pk=str(item.pk), username=item.username, created_on=get_string_date(item.created_on))
+        if item.device:
+            tmp['device'] = dict(pk=str(item.device.pk), name=item.device.name)
+        results.append(tmp)
+    response['results'] = results
+        
     return Response(json.dumps(response), status=status, mimetype='application/json')
 
 
@@ -194,6 +198,7 @@ def add_device_to_user(user_id, device_id):
     MAX_USER_LIMIT = 3
     device_assigned_count = get_device_count_for_user(device_id)
     if device_assigned_count >= MAX_USER_LIMIT:
+        status = 400
         response = {'detail': 'User limit for device exceeded'}
     else:
         try:
@@ -205,12 +210,29 @@ def add_device_to_user(user_id, device_id):
         else:
             device_obj = get_device_obj(device_id)
             if device_obj is None:
+                status = 400
                 response = {'device': 'No device is found'}
             else:
                 user.device = device_obj
                 user.save()
                 response = {'user': user.username, 'device': device_obj.name}
                 status = 200
+    return Response(json.dumps(response), status=status, mimetype='application/json')
+
+
+# just for testing purpose this view is not complete as password is directly set to user
+# password must be saved in hashed form. it is set and get by set_password and check_password method
+@app.route('/user/', methods=['POST'])
+def add_user():
+    response = {'detail': 'No operation performed'}
+    status = 400
+    if request.method.upper() == 'POST':
+        data = request.get_json()
+        username = data.get('username', '')
+        obj = User(username=username, password='1234', created_on=datetime.datetime.now())
+        obj.save()
+        response = {'username': obj.username}
+        status = 201
     return Response(json.dumps(response), status=status, mimetype='application/json')
 
 
