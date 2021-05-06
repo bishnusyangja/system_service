@@ -8,7 +8,7 @@ Click==7.0
 dnspython==1.16.0
 docutils==0.15.2
 Flask==1.1.1
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 flask-mongoengine==0.9.5
 Flask-RESTful==0.3.7
 Flask-WTF==0.14.2
